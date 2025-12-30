@@ -1,11 +1,70 @@
 import { View, Text, StyleSheet, TextInput, Keyboard } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 
 export default function TripSetupScreen() {
   const [destination, setDestination] = useState('');
   const [buffer, setBuffer] = useState<number | null>(null);
   const router = useRouter();
+
+  const startJourney = async () => {
+    if (!destination) {
+      alert('Please enter destination');
+      return;
+    }
+    if (buffer === null) {
+      alert('Please select alert time');
+      return;
+    }
+
+    Keyboard.dismiss();
+
+    try {
+      // 🔹 Ask location permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Location permission denied');
+        return;
+      }
+
+      // 🔹 Get real GPS
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const { latitude, longitude } = location.coords;
+      console.log('REAL GPS:', latitude, longitude);
+
+      // 🔹 Call backend (NO abort controller)
+      const response = await fetch(
+        'http://10.205.206.222:8000/journey/start',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            destination,
+            alert_before: buffer,
+            origin_lat: latitude,
+            origin_lng: longitude,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      console.log('Backend response:', data);
+
+      router.push({
+        pathname: '/status',
+        params: {
+          journeyData: JSON.stringify(data),
+        },
+      });
+    } catch (err) {
+      console.log('ERROR:', err);
+      alert('Failed to start journey');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -14,55 +73,29 @@ export default function TripSetupScreen() {
 
         <TextInput
           placeholder="Enter destination"
-          placeholderTextColor="#888"
           style={styles.input}
           value={destination}
           onChangeText={setDestination}
         />
 
-        <Text style={styles.preview}>Destination: {destination}</Text>
-
         <Text style={styles.label}>Alert Before Arrival</Text>
 
-        <View style={styles.bufferRow}>
-          {[10, 20, 30].map((min) => (
+        <View style={styles.row}>
+          {[10, 20, 30].map((m) => (
             <Text
-              key={min}
+              key={m}
               style={[
-                styles.bufferButton,
-                buffer === min && styles.bufferButtonSelected,
+                styles.btn,
+                buffer === m && styles.btnActive,
               ]}
-              onPress={() => setBuffer(min)}
+              onPress={() => setBuffer(m)}
             >
-              {min} min
+              {m} min
             </Text>
           ))}
         </View>
 
-        {buffer !== null && (
-          <Text style={styles.preview}>Selected: {buffer} min</Text>
-        )}
-
-        <Text
-          style={styles.startButton}
-          onPress={() => {
-            if (!destination) {
-              alert('Please enter destination');
-              return;
-            }
-            if (buffer === null) {
-              alert('Please select alert time');
-              return;
-            }
-
-            Keyboard.dismiss();
-
-            router.push({
-              pathname: '/status',
-              params: { destination, buffer },
-            });
-          }}
-        >
+        <Text style={styles.startBtn} onPress={startJourney}>
           Start Journey
         </Text>
       </View>
@@ -77,75 +110,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f2f2f2',
   },
-
   card: {
     width: '90%',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     padding: 20,
     borderRadius: 14,
     elevation: 5,
   },
-
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: '#000',
     textAlign: 'center',
   },
-
   input: {
-    width: '100%',
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 8,
     padding: 12,
     marginTop: 20,
-    fontSize: 16,
-    color: '#000',
   },
-
-  preview: {
-    marginTop: 15,
-    fontSize: 16,
-    color: '#333',
-  },
-
   label: {
-    marginTop: 30,
-    fontSize: 18,
+    marginTop: 20,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#000',
   },
-
-  bufferRow: {
+  row: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 10,
   },
-
-  bufferButton: {
+  btn: {
     borderWidth: 1,
     borderColor: '#ccc',
+    padding: 10,
+    marginHorizontal: 6,
     borderRadius: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginHorizontal: 5,
-    color: '#000',
   },
-
-  bufferButtonSelected: {
+  btnActive: {
     backgroundColor: '#cce5ff',
     borderColor: '#3399ff',
   },
-
-  startButton: {
-    marginTop: 40,
+  startBtn: {
+    marginTop: 30,
     backgroundColor: '#3399ff',
-    paddingVertical: 14,
+    color: '#fff',
+    padding: 14,
     borderRadius: 10,
-    color: '#ffffff',
     fontSize: 18,
-    fontWeight: 'bold',
     textAlign: 'center',
+    fontWeight: 'bold',
   },
 });
