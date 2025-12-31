@@ -2,40 +2,55 @@
 
 import requests
 
-API_KEY = "PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE"
+OSRM_BASE_URL = "https://router.project-osrm.org"
 
-def get_eta_from_maps(current_lat, current_lng, destination):
-    url = "https://maps.googleapis.com/maps/api/directions/json"
+def get_route_from_osrm(
+    curr_lat,
+    curr_lng,
+    dest_lat,
+    dest_lng
+):
+    """
+    Returns:
+    - route_coords: list of (lat, lng)
+    - duration_min
+    - distance_km
+    """
+
+    url = (
+        f"{OSRM_BASE_URL}/route/v1/driving/"
+        f"{curr_lng},{curr_lat};{dest_lng},{dest_lat}"
+    )
 
     params = {
-        "origin": f"{current_lat},{current_lng}",
-        "destination": destination,
-        "key": API_KEY,
-        "departure_time": "now"
+        "overview": "full",
+        "geometries": "geojson"
     }
 
     try:
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
+        resp = requests.get(url, params=params, timeout=10)
+        data = resp.json()
 
-        # 🔴 SAFETY CHECK
         if "routes" not in data or len(data["routes"]) == 0:
-            print("⚠ Maps returned no routes. Using fallback ETA.")
-            return fallback_eta()
+            print("⚠ OSRM returned no routes")
+            return fallback_route()
 
-        leg = data["routes"][0]["legs"][0]
+        route = data["routes"][0]
 
-        duration = leg.get("duration_in_traffic", leg["duration"])["value"]
-        distance = leg["distance"]["value"]
+        route_coords = [
+            (lat, lng)
+            for lng, lat in route["geometry"]["coordinates"]
+        ]
 
-        return duration / 60, distance / 1000
+        duration_min = route["duration"] / 60
+        distance_km = route["distance"] / 1000
+
+        return route_coords, duration_min, distance_km
 
     except Exception as e:
-        print("⚠ Map API error:", e)
-        return fallback_eta()
+        print("⚠ OSRM error:", e)
+        return fallback_route()
 
-def fallback_eta():
-    """
-    Safe fallback so backend NEVER crashes
-    """
-    return 300, 300.0
+
+def fallback_route():
+    return [], 300.0, 300.0

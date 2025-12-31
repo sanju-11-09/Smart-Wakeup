@@ -15,18 +15,12 @@ app.add_middleware(
 )
 
 # -------------------------------
-# OpenStreetMap: Geocoding
+# Geocoding (OSM)
 # -------------------------------
 def geocode_place(place):
     url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "q": place,
-        "format": "json",
-        "limit": 1
-    }
-    headers = {
-        "User-Agent": "smart-wakeup-app"
-    }
+    params = {"q": place, "format": "json", "limit": 1}
+    headers = {"User-Agent": "smart-wakeup-app"}
 
     r = requests.get(url, params=params, headers=headers, timeout=10)
     data = r.json()
@@ -39,9 +33,8 @@ def geocode_place(place):
         "lng": float(data[0]["lon"])
     }
 
-
 # -------------------------------
-# OpenStreetMap: Distance + ETA
+# Distance + ETA (OSRM – SIMPLE)
 # -------------------------------
 def get_distance_and_eta(origin, dest):
     url = (
@@ -55,15 +48,13 @@ def get_distance_and_eta(origin, dest):
     data = r.json()
 
     route = data["routes"][0]
-
     distance_km = route["distance"] / 1000
     eta_min = route["duration"] / 60
 
     return round(distance_km, 1), round(eta_min)
 
-
 # -------------------------------
-# API ENDPOINT
+# API
 # -------------------------------
 @app.post("/journey/start")
 def start_journey(payload: dict):
@@ -78,7 +69,7 @@ def start_journey(payload: dict):
     destination_coords = geocode_place(destination)
     distance, eta = get_distance_and_eta(origin, destination_coords)
 
-    # Mock motion & halt (fine for demo)
+    # Demo motion
     ax, ay, az = 0.001, 0.001, 0.003
     movement_status = detect_motion(ax, ay, az)
     speed = 60 if movement_status == "moving" else 0
@@ -109,9 +100,8 @@ def start_journey(payload: dict):
             "tracking_mode": "Hybrid",
             "battery_mode": "Optimized"
         },
-        "alert_triggered": False
+        "alert_triggered": eta <= alert_before
     }
-
 
 @app.get("/")
 def root():

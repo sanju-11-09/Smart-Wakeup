@@ -9,62 +9,65 @@ export default function TripSetupScreen() {
   const router = useRouter();
 
   const startJourney = async () => {
-    if (!destination) {
-      alert('Please enter destination');
-      return;
-    }
-    if (buffer === null) {
-      alert('Please select alert time');
+  if (!destination) {
+    alert('Please enter destination');
+    return;
+  }
+  if (buffer === null) {
+    alert('Please select alert time');
+    return;
+  }
+
+  Keyboard.dismiss();
+
+  try {
+    // 🔹 Ask location permission
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      alert('Location permission denied');
       return;
     }
 
-    Keyboard.dismiss();
+    // 🔹 Get real GPS
+    const location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
 
-    try {
-      // 🔹 Ask location permission
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        alert('Location permission denied');
-        return;
+    const { latitude, longitude } = location.coords;
+    console.log('REAL GPS:', latitude, longitude);
+
+    // 🔹 Call backend ONCE
+    const response = await fetch(
+      'http://10.205.206.222:8000/journey/start',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          destination,
+          alert_before: buffer,
+          origin_lat: latitude,
+          origin_lng: longitude,
+        }),
       }
+    );
 
-      // 🔹 Get real GPS
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+    const data = await response.json();
+    console.log('Backend response:', data);
 
-      const { latitude, longitude } = location.coords;
-      console.log('REAL GPS:', latitude, longitude);
+    // 🔹 Navigate to status screen with backend data
+    router.push({
+      pathname: '/status',
+      params: {
+        journeyData: JSON.stringify(data),
+      },
+    });
 
-      // 🔹 Call backend (NO abort controller)
-      const response = await fetch(
-        'http://10.205.206.222:8000/journey/start',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            destination,
-            alert_before: buffer,
-            origin_lat: latitude,
-            origin_lng: longitude,
-          }),
-        }
-      );
+  } catch (err) {
+    console.log('ERROR:', err);
+    alert('Failed to start journey');
+  }
+};
 
-      const data = await response.json();
-      console.log('Backend response:', data);
-
-      router.push({
-        pathname: '/status',
-        params: {
-          journeyData: JSON.stringify(data),
-        },
-      });
-    } catch (err) {
-      console.log('ERROR:', err);
-      alert('Failed to start journey');
-    }
-  };
 
   return (
     <View style={styles.container}>
